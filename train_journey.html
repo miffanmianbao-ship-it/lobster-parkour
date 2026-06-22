@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>🚂 上海→拉萨 · 风景列车</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0a0a0a;display:flex;justify-content:center;align-items:center;height:100vh;overflow:hidden;font-family:'Microsoft YaHei',sans-serif;}
+#gc{position:relative;border-radius:14px;overflow:hidden;box-shadow:0 0 80px rgba(0,0,0,0.6)}
+canvas{display:block}
+</style>
+</head>
+<body><div id="gc"><canvas id="g"></canvas></div>
+<script>
+const W=1100,H=600;
+const cv=document.getElementById('g');cv.width=W;cv.height=H;
+const C=cv.getContext('2d');
+
+// ==================== 北京时间系统 ====================
+function getBJTime(){return new Date(new Date().toLocaleString('en-US',{timeZone:'Asia/Shanghai'}))}
+function getHour(){return getBJTime().getHours()+getBJTime().getMinutes()/60}
+
+// 根据时间返回光照参数
+function getLighting(){
+  const h=getHour();
+  if(h>=5&&h<7)return{name:'黎明',sky:['#2A1A40','#5A3060','#E8A870'],sunY:0.35,ambient:'#FFD0A0',starAlpha:0.3,trainLight:'#FFE0C0',brightness:0.5};
+  if(h>=7&&h<9)return{name:'清晨',sky:['#6BB5E0','#B8D8F0','#FFF8E8'],sunY:0.2,ambient:'#FFF8E0',starAlpha:0,trainLight:'#FFF8E0',brightness:0.75};
+  if(h>=9&&h<16)return{name:'白天',sky:['#4A90D9','#87CEEB','#E8F0FF'],sunY:0.05,ambient:'#FFFFFF',starAlpha:0,trainLight:'#FFFFFF',brightness:1};
+  if(h>=16&&h<18)return{name:'下午',sky:['#5BA0D0','#C8D8E8','#FFE8D0'],sunY:0.1,ambient:'#FFE8D0',starAlpha:0,trainLight:'#FFE8C0',brightness:0.9};
+  if(h>=18&&h<20)return{name:'黄昏',sky:['#3A2060','#8050A0','#FFA060'],sunY:0.4,ambient:'#FFB080',starAlpha:0.1,trainLight:'#FFD0A0',brightness:0.6};
+  if(h>=20||h<5)return{name:'夜晚',sky:['#050515','#0A0A30','#101040'],sunY:0.9,ambient:'#101030',starAlpha:1,trainLight:'#403020',brightness:0.25};
+  return getLighting.default||{name:'白天',sky:['#4A90D9','#87CEEB','#E8F0FF'],sunY:0.05,ambient:'#FFFFFF',starAlpha:0,trainLight:'#FFFFFF',brightness:1};
+}
+
+// ==================== 铁路线：上海→拉萨 八段风景 ====================
+const ROUTE=[
+  {name:'上海出发',km:0,desc:'华东平原·稻田水乡',
+   groundBase:'#4A8C3C',mountainColor:'#6B9E4A',mountainH:80,variant:0,
+   nearItems:'rice',skyFeature:'clouds'},
+  {name:'南京—郑州',km:300,desc:'江淮丘陵·黄河两岸',
+   groundBase:'#5D8A3C',mountainColor:'#7BA05A',mountainH:110,variant:1,
+   nearItems:'poles',skyFeature:'clouds'},
+  {name:'西安—兰州',km:600,desc:'黄土高原·千沟万壑',
+   groundBase:'#C4955A',mountainColor:'#D4A850',mountainH:140,variant:2,
+   nearItems:'poles',skyFeature:'haze'},
+  {name:'西宁—格尔木',km:900,desc:'青海草原·盐湖如镜',
+   groundBase:'#8AB860',mountainColor:'#A0C878',mountainH:100,variant:3,
+   nearItems:'grass',skyFeature:'clouds'},
+  {name:'格尔木—唐古拉',km:1200,desc:'可可西里·雪山初现',
+   groundBase:'#C8C898',mountainColor:'#D0D8E8',mountainH:180,variant:4,
+   nearItems:'grass',skyFeature:'snowcloud'},
+  {name:'唐古拉山口',km:1500,desc:'世界屋脊·冰川雪峰',
+   groundBase:'#E0E8F0',mountainColor:'#E8EDF2',mountainH:250,variant:5,
+   nearItems:'snow',skyFeature:'snowcloud'},
+  {name:'那曲—当雄',km:1800,desc:'羌塘草原·牦牛遍野',
+   groundBase:'#B8C898',mountainColor:'#D0D8D8',mountainH:160,variant:6,
+   nearItems:'grass',skyFeature:'clouds'},
+  {name:'拉萨',km:2100,desc:'圣地拉萨·布达拉宫',
+   groundBase:'#9AB868',mountainColor:'#E8D8C8',mountainH:200,variant:7,
+   nearItems:'flags',skyFeature:'clouds'}
+];
+
+let journeyPos=0; // 当前旅程位置(km)
+let trainSpeed=0; // 当前速度
+let targetSpeed=0; // 目标速度
+let stopped=false;
+let stopTimer=0;
+let stationName='';
+let frame=0;
+
+// 列车状态机
+function updateTrain(){
+  frame++;
+  // 随机停靠
+  if(!stopped&&Math.random()<0.0005){
+    stopped=true;stopTimer=180+Math.floor(Math.random()*240);
+    const seg=getSegment();
+    stationName=['苏州站','南京站','郑州站','西安站','兰州站','西宁站','格尔木站','那曲站','当雄站'][Math.floor(Math.random()*9)];
+    targetSpeed=0;
+  }
+  if(stopped){
+    stopTimer--;
+    if(stopTimer<=0){stopped=false;targetSpeed=1.5+Math.random()*2.5;stationName=''}
+  }else{
+    // 偶尔变速
+    if(Math.random()<0.003)targetSpeed=1.0+Math.random()*3.0;
+  }
+  // 平滑加减速
+  trainSpeed+=(targetSpeed-trainSpeed)*0.02;
+  if(trainSpeed>0)journeyPos+=trainSpeed*0.15;
+  // 循环路线：到了拉萨后重新从上海开始
+  if(journeyPos>ROUTE[ROUTE.length-1].km+300)journeyPos=0;
+}
+
+function getSegment(){
+  for(let i=ROUTE.length-1;i>=0;i--)if(journeyPos>=ROUTE[i].km)return ROUTE[i];
+  return ROUTE[0];
+}
+function getNextSeg(){
+  const seg=getSegment();
+  const idx=ROUTE.indexOf(seg);
+  return ROUTE[Math.min(idx+1,ROUTE.length-1)];
+}
+
+// ==================== 绘制 ====================
+function drawSky(light){
+  const g=C.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,light.sky[0]);g.addColorStop(0.5,light.sky[1]);g.addColorStop(1,light.sky[2]);
+  C.fillStyle=g;C.fillRect(0,0,W,H);
+}
+
+function drawStars(alpha){
+  if(alpha<=0)return;
+  for(let i=0;i<80;i++){
+    const sx=(i*173)%W,sy=(i*97)%(H*0.5);
+    const b=(0.3+Math.sin(frame*0.02+i)*0.3)*alpha;
+    C.fillStyle=`rgba(255,255,255,${b})`;C.fillRect(sx,sy,1.5,1.5);
+  }
+}
+
+function drawSun(light){
+  if(light.sunY>0.5)return;
+  const sy=H*light.sunY;
+  const g=C.createRadialGradient(W*0.7,sy,10,W*0.7,sy,180);
+  g.addColorStop(0,'rgba(255,255,200,0.4)');g.addColorStop(1,'rgba(255,200,100,0)');
+  C.fillStyle=g;C.fillRect(0,0,W,H);
+}
+
+function drawMoon(light){
+  if(light.starAlpha<0.5)return;
+  C.fillStyle='#FFF8E0';C.shadowColor='#FFF8C0';C.shadowBlur=20;
+  C.beginPath();C.arc(W*0.75,80,30,0,Math.PI*2);C.fill();C.shadowBlur=0;
+  C.fillStyle=light.sky[0];C.beginPath();C.arc(W*0.75+10,75,25,0,Math.PI*2);C.fill();
+}
+
+function drawMountains(seg,light,scroll){
+  C.fillStyle=seg.mountainColor;
+  C.globalAlpha=light.brightness*0.5;
+  C.beginPath();C.moveTo(0,H*0.5);
+  const mh=seg.mountainH;
+  for(let x=0;x<=W;x+=3){
+    const nx=(x+scroll*0.15)%W;
+    const h=H*0.45-Math.sin(nx*0.003)*mh*0.6-Math.sin(nx*0.007+2)*mh*0.3-Math.sin(nx*0.013+4)*mh*0.15;
+    C.lineTo(x,h);
+  }
+  C.lineTo(W,H);C.lineTo(0,H);C.closePath();C.fill();
+
+  // 雪线（高海拔段）
+  if(seg.variant>=4){
+    C.fillStyle='#FFFFFF';C.globalAlpha=light.brightness*0.6;
+    C.beginPath();C.moveTo(0,H*0.5);
+    for(let x=0;x<=W;x+=3){
+      const nx=(x+scroll*0.15)%W;
+      let h=H*0.45-Math.sin(nx*0.003)*mh*0.6-Math.sin(nx*0.007+2)*mh*0.3;
+      if(h<H*0.2)h=H*0.2;
+      C.lineTo(x,h-8-Math.sin(nx*0.01)*5);
+    }
+    C.lineTo(W,H);C.lineTo(0,H);C.closePath();C.fill();
+  }
+  C.globalAlpha=1;
+}
+
+function drawGround(seg,light,scroll){
+  // 起伏地面
+  C.fillStyle=seg.groundBase;C.globalAlpha=light.brightness*0.7;
+  C.beginPath();C.moveTo(0,H*0.52);
+  for(let x=0;x<=W;x+=3){
+    const nx=(x+scroll*0.3)%W;
+    C.lineTo(x,H*0.52-Math.sin(nx*0.005)*12-Math.sin(nx*0.012)*8);
+  }
+  C.lineTo(W,H);C.lineTo(0,H);C.closePath();C.fill();
+
+  // 近景：电线杆/树/经幡
+  for(let i=0;i<8;i++){
+    const nx=((i*150+scroll*0.8)%(W+200))-100;
+    const y0=H*0.5-Math.sin(nx*0.005)*10;
+    if(seg.nearItems==='poles'){C.strokeStyle='#555';C.lineWidth=2;C.beginPath();C.moveTo(nx,y0);C.lineTo(nx,y0-50);C.stroke();C.strokeStyle='#333';C.lineWidth=1;C.beginPath();C.moveTo(nx-10,y0-45);C.lineTo(nx+10,y0-45);C.stroke()}
+    else if(seg.nearItems==='grass'){C.strokeStyle='#7A9A50';C.lineWidth=2;for(let g=0;g<3;g++){C.beginPath();C.moveTo(nx+g*8,GROUND);C.quadraticCurveTo(nx+g*8+Math.sin(frame*0.05+g)*3,GROUND-15,nx+g*8+Math.sin(frame*0.05+g)*5,GROUND-22);C.stroke()}}
+    else if(seg.nearItems==='flags'){C.strokeStyle='#8B4513';C.lineWidth=2;C.beginPath();C.moveTo(nx,y0);C.lineTo(nx,y0-40);C.stroke();C.fillStyle='#FF6347';C.fillRect(nx-2,y0-40,4,8);C.fillStyle='#FFD700';C.fillRect(nx-2,y0-32,4,8);C.fillStyle='#4169E1';C.fillRect(nx-2,y0-24,4,8);C.fillStyle='#228B22';C.fillRect(nx-2,y0-16,4,8)}
+    else if(seg.nearItems==='snow'){C.fillStyle='#FFF';C.beginPath();C.arc(nx,y0,12+Math.sin(nx)*4,0,Math.PI);C.fill()}
+  }
+  C.globalAlpha=1;
+}
+
+function drawClouds(light,scroll){
+  C.globalAlpha=light.brightness*0.5;
+  for(let i=0;i<5;i++){
+    const cx=((i*240+scroll*0.08)%(W+200))-100;
+    const cy=40+(i*35)%80;
+    C.fillStyle='rgba(255,255,255,0.6)';
+    C.beginPath();C.arc(cx,cy,22,0,Math.PI*2);C.arc(cx+15,cy-8,16,0,Math.PI*2);C.arc(cx+30,cy,18,0,Math.PI*2);C.arc(cx-8,cy+4,12,0,Math.PI*2);C.fill();
+  }
+  C.globalAlpha=1;
+}
+
+function drawRain(light){
+  if(Math.random()>0.3)return;
+  C.globalAlpha=light.brightness*0.2;
+  for(let i=0;i<20;i++){const rx=((i*197+frame*3)%W),ry=((i*131+frame*5)%H);C.strokeStyle='rgba(200,220,255,0.5)';C.lineWidth=1;C.beginPath();C.moveTo(rx,ry);C.lineTo(rx-2,ry+8);C.stroke()}
+  C.globalAlpha=1;
+}
+
+function drawTrainInterior(light){
+  // 窗帘
+  C.fillStyle='#8B6F5E';C.fillRect(0,0,40,H);C.fillRect(W-40,0,40,H);
+  C.fillStyle='#A08870';C.fillRect(0,0,40,H*0.35);C.fillRect(W-40,0,40,H*0.35);
+  // 窗帘褶皱
+  C.strokeStyle='#6B5040';C.lineWidth=1;
+  for(let y=0;y<H*0.35;y+=20){C.beginPath();C.moveTo(0,y);C.lineTo(40,y);C.stroke();C.beginPath();C.moveTo(W-40,y);C.lineTo(W,y);C.stroke()}
+
+  // 窗框
+  C.strokeStyle='#5C4033';C.lineWidth=8;C.strokeRect(38,2,W-76,H-4);
+  C.strokeStyle='#3D2013';C.lineWidth=3;C.strokeRect(36,0,W-72,H);
+
+  // 窗台
+  C.fillStyle='#5C4033';C.fillRect(0,H-40,W,40);
+  C.fillStyle='#7A5C4A';C.fillRect(0,H-40,W,3);
+
+  // 小桌板
+  C.fillStyle='#8B6F5E';C.fillRect(W-200,H-60,160,5);
+  C.fillStyle='#7A5C4A';C.fillRect(W-200,H-55,160,2);
+
+  // 茶杯（冒热气）
+  C.fillStyle='#F5F5DC';C.beginPath();C.arc(W-160,H-70,12,0,Math.PI*2);C.fill();
+  C.fillStyle='#E8D8C0';C.beginPath();C.arc(W-160,H-70,9,0,Math.PI*2);C.fill();
+  if(Math.random()>0.3){C.fillStyle='rgba(255,255,255,0.4)';C.beginPath();C.arc(W-160,H-82,3+Math.sin(frame*0.1)*2,0,Math.PI*2);C.fill();C.arc(W-158,H-90,2,0,Math.PI*2);C.fill()}
+}
+
+function drawMouse(light){
+  const mx=W-150,my=H-85;
+  // 喷气背包小鼠坐在窗台
+  C.fillStyle='#DEB887';C.beginPath();C.roundRect(mx,my,24,30,6);C.fill();
+  C.fillStyle='#C4A56A';C.beginPath();C.arc(mx+6,my-2,7,0,Math.PI*2);C.fill();C.beginPath();C.arc(mx+18,my-2,7,0,Math.PI*2);C.fill();
+  C.fillStyle='#FFB6C1';C.beginPath();C.arc(mx+6,my-2,4,0,Math.PI*2);C.fill();C.beginPath();C.arc(mx+18,my-2,4,0,Math.PI*2);C.fill();
+  C.fillStyle='#FFF';C.beginPath();C.arc(mx+8,my+10,6,0,Math.PI*2);C.fill();C.beginPath();C.arc(mx+16,my+10,6,0,Math.PI*2);C.fill();
+  C.fillStyle='#1a1a1a';C.beginPath();C.arc(mx+9,my+10,3,0,Math.PI*2);C.fill();C.beginPath();C.arc(mx+17,my+10,3,0,Math.PI*2);C.fill();
+  C.fillStyle='#FF69B4';C.beginPath();C.arc(mx+12,my+15,3,0,Math.PI*2);C.fill();
+  C.fillStyle='#708090';C.fillRect(mx+4,my+20,16,8);
+  // 围巾
+  if(getSegment().variant>=4){C.fillStyle='#FF3333';C.fillRect(mx+5,my+12,14,3);C.fillRect(mx+14,my+13,10,3)}
+}
+
+function drawHUD(light,seg){
+  const now=getBJTime();
+  const h=now.getHours().toString().padStart(2,'0');
+  const m=now.getMinutes().toString().padStart(2,'0');
+  const s=now.getSeconds().toString().padStart(2,'0');
+
+  // 左下角：时钟+光照
+  C.fillStyle='rgba(0,0,0,0.6)';C.roundRect(50,H-100,130,60,8);C.fill();
+  C.fillStyle='#FFF';C.font='bold 22px "Courier New"';C.textAlign='left';
+  C.fillText(`${h}:${m}:${s}`,60,H-68);
+  C.fillStyle='#FFD700';C.font='12px "Microsoft YaHei"';
+  C.fillText(`${light.name} · 北京时间`,60,H-48);
+
+  // 右上角：路线信息
+  C.fillStyle='rgba(0,0,0,0.6)';C.roundRect(W-260,10,210,60,8);C.fill();
+  C.fillStyle='#FFF';C.font='bold 14px "Microsoft YaHei"';C.textAlign='right';
+  C.fillText(`📍 ${seg.name}`,W-60,35);
+  C.fillStyle='#CCC';C.font='12px "Microsoft YaHei"';
+  C.fillText(seg.desc,W-60,55);
+  C.fillText(`里程 ${Math.floor(journeyPos)}km`,W-60,70);
+
+  // 停靠提示
+  if(stopped&&stationName){
+    C.fillStyle='rgba(0,0,0,0.7)';C.roundRect(W/2-100,H/2-30,200,60,10);C.fill();
+    C.fillStyle='#FFD700';C.font='bold 18px "Microsoft YaHei"';C.textAlign='center';
+    C.fillText(`🚉 ${stationName}`,W/2,H/2+2);
+    C.fillStyle='#FFF';C.font='12px "Microsoft YaHei"';
+    C.fillText(`停车 ${Math.ceil(stopTimer/60)}秒`,W/2,H/2+25);
+  }
+
+  // 路线进度条
+  C.fillStyle='rgba(0,0,0,0.5)';C.fillRect(50,H-25,W-100,5);
+  const progress=journeyPos/ROUTE[ROUTE.length-1].km;
+  C.fillStyle='#FFD700';C.fillRect(50,H-25,(W-100)*Math.min(progress,1),5);
+  // 站标记
+  ROUTE.forEach(r=>{const px=50+(W-100)*(r.km/ROUTE[ROUTE.length-1].km);C.fillStyle='#FFF';C.fillRect(px-2,H-28,4,10)});
+  C.fillStyle='#FFF';C.font='10px "Microsoft YaHei"';C.textAlign='center';
+  C.fillText('上海',55,H-15);C.fillText('拉萨',W-55,H-15);
+
+  // 速度
+  if(!stopped){C.fillStyle='rgba(255,255,255,0.5)';C.font='11px "Microsoft YaHei"';C.textAlign='left';C.fillText(`🚂 ${Math.floor(trainSpeed*60)}km/h`,60,H-80)}
+}
+
+function draw(){
+  const light=getLighting();
+  const seg=getSegment();
+  const scroll=journeyPos*40;
+
+  drawSky(light);
+  drawStars(light.starAlpha);
+  drawSun(light);
+  drawMoon(light);
+  drawClouds(light,scroll);
+  drawMountains(seg,light,scroll);
+  drawGround(seg,light,scroll);
+  if(seg.variant===2)drawRain(light);
+  drawTrainInterior(light);
+  drawMouse(light);
+  drawHUD(light,seg);
+}
+
+// ==================== 交互 ====================
+cv.addEventListener('click',()=>{
+  if(stopped){stopped=false;stopTimer=0;targetSpeed=3;stationName=''}
+  else if(trainSpeed<0.3){targetSpeed=2.5}
+});
+
+function loop(){updateTrain();draw();requestAnimationFrame(loop)}
+targetSpeed=2.5; // 初始速度
+loop();
+</script></body></html>
