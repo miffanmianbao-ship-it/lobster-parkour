@@ -163,32 +163,31 @@ function drawSky(si){
 }
 
 function drawGodRays(cx,cy,color){
-  C.save();C.globalCompositeOperation='lighter';
-  for(let i=0;i<6;i++){
-    const angle=(i/6)*Math.PI*2+frame*0.001;
-    const len=200+Math.sin(i*2.7)*80;
+  for(let i=0;i<5;i++){
+    const angle=(i/5)*Math.PI*2+frame*0.0005;
+    const len=180+Math.sin(i*2.7)*60;
     const g=C.createLinearGradient(cx,cy,cx+Math.cos(angle)*len,cy+Math.sin(angle)*len);
     g.addColorStop(0,color);g.addColorStop(1,'transparent');
-    C.fillStyle=g;C.globalAlpha=0.06+Math.sin(frame*0.02+i)*0.02;
-    C.beginPath();C.moveTo(cx,cy);C.lineTo(cx+Math.cos(angle-0.1)*len,cy+Math.sin(angle-0.1)*len);C.lineTo(cx+Math.cos(angle+0.1)*len,cy+Math.sin(angle+0.1)*len);C.closePath();C.fill();
+    C.globalAlpha=0.04+Math.sin(frame*0.015+i)*0.015;
+    C.fillStyle=g;
+    C.beginPath();C.moveTo(cx,cy);C.lineTo(cx+Math.cos(angle-0.08)*len,cy+Math.sin(angle-0.08)*len);C.lineTo(cx+Math.cos(angle+0.08)*len,cy+Math.sin(angle+0.08)*len);C.closePath();C.fill();
   }
-  C.globalAlpha=1;C.globalCompositeOperation='source-over';C.restore();
+  C.globalAlpha=1;
 }
 
 function drawAurora(){
-  C.save();C.globalCompositeOperation='lighter';
   for(let b=0;b<3;b++){
     C.beginPath();
     for(let x=0;x<=W;x+=4){
-      const y=40+b*35+Math.sin(x*0.008+frame*0.02+b*2)*25+Math.sin(x*0.015+frame*0.015)*15;
+      const y=40+b*35+Math.sin(x*0.008+frame*0.015+b*2)*20+Math.sin(x*0.015+frame*0.01)*12;
       if(x===0)C.moveTo(x,y);else C.lineTo(x,y);
     }
     C.lineTo(W,GROUND);C.lineTo(0,GROUND);C.closePath();
-    const alpha=0.08+Math.sin(frame*0.03+b)*0.03;
-    C.fillStyle=b===0?`rgba(100,255,180,${alpha})`:b===1?`rgba(80,200,255,${alpha})`:`rgba(150,100,255,${alpha})`;
+    C.globalAlpha=0.06+Math.sin(frame*0.02+b)*0.02;
+    C.fillStyle=b===0?'rgba(100,255,180,1)':b===1?'rgba(80,200,255,1)':'rgba(150,100,255,1)';
     C.fill();
   }
-  C.restore();
+  C.globalAlpha=1;
 }
 
 function drawOceanSparkles(){
