@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>💥 Word Blast 单词大爆炸</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#050510;display:flex;justify-content:center;align-items:center;height:100vh;overflow:hidden;font-family:'Microsoft YaHei',sans-serif}
+canvas{display:block;border-radius:12px}
+#input-area{position:fixed;bottom:30px;left:50%;transform:translateX(-50%);z-index:10;display:flex;gap:8px}
+#word-input{padding:12px 18px;font-size:20px;border:3px solid #FFD700;border-radius:10px;background:rgba(0,0,0,0.8);color:#FFD700;outline:none;width:280px;text-align:center;font-family:'Courier New',monospace;letter-spacing:3px}
+#word-input::placeholder{color:#555;letter-spacing:0}
+#word-input:focus{border-color:#FF4500;box-shadow:0 0 20px rgba(255,100,0,0.4)}
+</style>
+</head>
+<body>
+<canvas id="g"></canvas>
+<input type="text" id="word-input" placeholder="输入单词后按回车..." autofocus autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+
+<script>
+const W=1100,H=650;
+const cv=document.getElementById('g');cv.width=W;cv.height=H;
+const C=cv.getContext('2d');
+const inp=document.getElementById('word-input');
+
+// ==================== 六年级词汇库 ====================
+const WORDS=[
+  'cat','dog','bird','fish','rabbit','horse','tiger','lion','monkey','panda','bear','duck','frog','snake','sheep','cow','pig','hen','fox','deer',
+  'apple','banana','bread','cake','milk','rice','egg','orange','pizza','water','juice','noodle','chicken','grape','mango','lemon','peach','sugar','cream','honey',
+  'red','blue','green','yellow','white','black','pink','purple','brown','gray','gold','silver',
+  'book','pen','desk','chair','ruler','bag','clock','phone','door','room','wall','bed','cup','hat','dress','shoe','coat','watch',
+  'run','jump','swim','fly','sing','dance','read','write','draw','play','eat','drink','walk','ride','climb','sleep','cook','wash',
+  'sun','moon','star','tree','flower','rain','snow','river','cloud','wind','hill','lake','sea','sky','park','farm','zoo','beach','road','bridge',
+  'head','hand','foot','eye','ear','nose','mouth','arm','leg','hair','face','body',
+  'mother','father','sister','brother','family','friend','baby','grandma','grandpa','uncle','aunt','cousin',
+  'happy','good','big','small','new','old','long','short','tall','thin','fat','hot','cold','warm','cool','fast','slow','easy','hard',
+  'Monday','Tuesday','school','class','music','math','art','sport','lunch','dinner','garden','spring','summer','autumn','winter'
+];
+
+// ==================== 音效 ====================
+let actx;
+function ia(){if(!actx)actx=new(window.AudioContext||window.webkitAudioContext)()}
+function sfx(f,t,d,m=1,s=0){if(!actx)return;const n=actx.currentTime;const o=actx.createOscillator(),g=actx.createGain();o.type=t;o.frequency.setValueAtTime(f,n);if(s)o.frequency.linearRampToValueAtTime(f+s,n+d);g.gain.setValueAtTime(0.15*m,n);g.gain.exponentialRampToValueAtTime(0.001,n+d);o.connect(g);g.connect(actx.destination);o.start(n);o.stop(n+d)}
+function blastS(){sfx(80,'square',0.3,0.8,-20);setTimeout(()=>sfx(200,'sawtooth',0.15,0.5,100),80)}
+function missS(){sfx(60,'sine',0.4,0.5)}
+function combo2S(){sfx(400,'square',0.1,0.5,200)}
+function combo3S(){sfx(300,'square',0.1,0.3,300);setTimeout(()=>sfx(500,'square',0.1,0.3,300),60);setTimeout(()=>sfx(700,'square',0.1,0.3,300),120)}
+function levelS(){sfx(200,'sine',0.15,0.5,300);setTimeout(()=>sfx(400,'sine',0.15,0.5,300),100);setTimeout(()=>sfx(600,'sine',0.15,0.5,300),200)}
+function loseS(){sfx(50,'sawtooth',0.6,0.8);setTimeout(()=>sfx(30,'sawtooth',0.8,0.5),200)}
+
+// ==================== 状态 ====================
+let state='menu'; // menu|playing|over
+let score=0,level=1,comboC=0,misses=0;
+let hiScore=parseInt(localStorage.wordBlastHi)||0;
+let frame=0,speed=0.6;
+let words=[],particles=[];
+let nextSpawn=60;
+
+// 飘落的单词
+function spawnWord(){
+  const w=WORDS[Math.floor(Math.random()*WORDS.length)];
+  const x=80+Math.random()*(W-160);
+  words.push({text:w,x,y:-30,speed:0.5+Math.random()*0.6+speed*0.3,alpha:1,color:`hsl(${Math.random()*360},70%,60%)`});
+}
+
+// 粒子爆炸
+function explode(x,y,color,n){
+  for(let i=0;i<n;i++){
+    particles.push({
+      x,y,color,
+      vx:(Math.random()-0.5)*12,vy:(Math.random()-0.5)*12-Math.random()*8,
+      life:1,decay:0.01+Math.random()*0.03,size:2+Math.random()*6,
+      text:Math.random()>0.7?color:null
+    });
+  }
+}
+
+// ==================== 更新 ====================
+function update(){
+  if(state!=='playing')return;
+  frame++;
+
+  // 生成单词
+  nextSpawn--;
+  if(nextSpawn<=0){
+    spawnWord();
+    nextSpawn=Math.max(25,80-level*5)+Math.floor(Math.random()*30);
+  }
+
+  // 更新单词
+  words.forEach(w=>{w.y+=w.speed;});
+  words=words.filter(w=>{
+    if(w.y>H+20){misses++;missS();comboC=0;return false}
+    return true;
+  });
+
+  // 更新粒子
+  particles.forEach(p=>{p.x+=p.vx;p.y+=p.vy;p.vy+=0.1;p.life-=p.decay});
+  particles=particles.filter(p=>p.life>0);
+
+  // 升级
+  const newLevel=Math.floor(score/200)+1;
+  if(newLevel>level){level=newLevel;speed=0.4+level*0.12;levelS()}
+
+  // 游戏结束
+  if(misses>=5){state='over';loseS();if(score>hiScore){hiScore=score;localStorage.wordBlastHi=hiScore}}
+}
+
+// 检查输入
+inp.addEventListener('keydown',e=>{
+  if(e.key!=='Enter')return;
+  ia();
+  const typed=inp.value.trim().toLowerCase();
+  inp.value='';
+
+  if(state==='menu'){state='playing';score=0;level=1;comboC=0;misses=0;speed=0.6;words=[];particles=[];nextSpawn=30;return}
+  if(state==='over'){state='playing';score=0;level=1;comboC=0;misses=0;speed=0.6;words=[];particles=[];nextSpawn=30;return}
+
+  // 匹配单词
+  let found=false;
+  for(let i=words.length-1;i>=0;i--){
+    if(words[i].text===typed){
+      comboC++;score+=100*Math.min(comboC,5);
+      explode(words[i].x,words[i].y,words[i].color,20+comboC*5);
+      blastS();
+      if(comboC===5)combo2S();
+      if(comboC===10)combo3S();
+      words.splice(i,1);
+      found=true;break;
+    }
+  }
+  if(!found){missS();comboC=0}
+});
+
+// ==================== 绘制 ====================
+function drawBg(){
+  C.fillStyle='#050510';C.fillRect(0,0,W,H);
+  for(let i=0;i<100;i++){
+    const sx=(i*173+frame*0.2)%W,sy=(i*97)%H;
+    C.fillStyle=`rgba(255,255,255,${0.2+Math.sin(i*1.7)*0.15})`;
+    C.fillRect(sx,sy,1.5,1.5);
+  }
+}
+
+function drawWords(){
+  words.forEach(w=>{
+    C.globalAlpha=w.alpha;
+    C.fillStyle=w.color;C.font='bold 28px "Courier New"';
+    C.textAlign='center';
+    C.shadowColor=w.color;C.shadowBlur=12;
+    C.fillText(w.text,w.x,w.y);
+    C.shadowBlur=0;
+    C.globalAlpha=1;
+  });
+}
+
+function drawParticles(){
+  particles.forEach(p=>{
+    C.globalAlpha=p.life;
+    C.fillStyle=p.color;
+    C.beginPath();C.arc(p.x,p.y,p.size,0,Math.PI*2);C.fill();
+  });
+  C.globalAlpha=1;
+}
+
+function drawHUD(){
+  C.fillStyle='#FFD700';C.font='bold 18px "Microsoft YaHei"';C.textAlign='left';
+  C.fillText(`⭐ ${score}`,20,35);
+  C.fillStyle='#FF6347';C.fillText(`❤️ ${5-misses}`,20,62);
+  C.fillStyle='#87CEEB';C.fillText(`📈 Lv.${level}`,20,89);
+  if(comboC>=3){C.fillStyle='#FF4500';C.font=`bold ${16+Math.min(comboC,16)}px "Microsoft YaHei"`;C.textAlign='right';C.fillText(`🔥 x${comboC} COMBO!`,W-20,35)}
+  C.textAlign='right';C.fillStyle='#888';C.font='13px "Microsoft YaHei"';C.fillText(`🏆 最高分: ${hiScore}`,W-20,60);
+}
+
+function drawMenu(){
+  C.fillStyle='rgba(0,0,0,0.7)';C.fillRect(0,0,W,H);
+  C.textAlign='center';
+  C.fillStyle='#FFD700';C.font='bold 44px "Microsoft YaHei"';C.fillText('💥 单词大爆炸 💥',W/2,H/2-80);
+  C.fillStyle='#FFF';C.font='17px "Microsoft YaHei"';C.fillText('—— 打出单词 · 炸碎屏幕 · 挑战高分 ——',W/2,H/2-30);
+  C.fillStyle='#CCC';C.font='14px "Microsoft YaHei"';
+  C.fillText('📝 看到屏幕上飘落的英文单词，输入后按回车炸掉它！',W/2,H/2+15);
+  C.fillText('🔥 连续正确触发连击倍率 · ❤️ 漏掉5个游戏结束',W/2,H/2+42);
+  C.fillText(`📚 内含${WORDS.length}个六年级核心词汇 · 边玩边复习`,W/2,H/2+69);
+  C.fillStyle='#FFD700';C.font='bold 18px "Microsoft YaHei"';
+  C.fillText('输入任意单词按回车 开始游戏！',W/2,H/2+115);
+  if(hiScore>0)C.fillText(`🏆 历史最高分：${hiScore}`,W/2,H/2+150);
+}
+
+function drawOver(){
+  C.fillStyle='rgba(0,0,0,0.7)';C.fillRect(0,0,W,H);
+  C.textAlign='center';
+  C.fillStyle='#FF4500';C.font='bold 40px "Microsoft YaHei"';C.fillText('游戏结束！',W/2,H/2-50);
+  C.fillStyle='#FFF';C.font='20px "Microsoft YaHei"';
+  C.fillText(`得分：${score}   等级：Lv.${level}   连击：x${comboC}`,W/2,H/2+5);
+  if(score>=hiScore&&score>0){C.fillStyle='#FFD700';C.font='bold 24px';C.fillText('🏆 新纪录！🏆',W/2,H/2-90)}
+  C.fillStyle='#CCC';C.font='16px';C.fillText('输入任意单词按回车 重新开始',W/2,H/2+50);
+  C.fillText(`你掌握了 ${Math.floor(score/100)} 个单词！`,W/2,H/2+80);
+}
+
+function draw(){
+  C.clearRect(0,0,W,H);
+  drawBg();
+  if(state==='playing'){drawWords();drawParticles();drawHUD()}
+  if(state==='menu')drawMenu();
+  if(state==='over'){drawWords();drawParticles();drawOver()}
+  requestAnimationFrame(()=>{update();draw()});
+}
+draw();
+</script>
+</body>
+</html>
