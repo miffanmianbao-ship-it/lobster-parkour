@@ -2,8 +2,8 @@ import streamlit as st
 import os
 
 st.set_page_config(
-    page_title="小鼠去旅行 - 风景跑酷",
-    page_icon="🐭",
+    page_title="喷气小鼠游欧洲 - 风景跑酷",
+    page_icon="🚀",
     layout="centered"
 )
 
