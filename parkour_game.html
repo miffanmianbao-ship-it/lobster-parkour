@@ -54,10 +54,10 @@ function getSi(){for(let i=SCENES.length-1;i>=0;i--)if(distance>=SCENES[i].start
 function getImg(si){const s=SCENES[si];if(!s)return null;for(let u of s.imgs){if(imgCache[u]&&imgCache[u].complete&&imgCache[u].naturalWidth>0)return imgCache[u]}return null}
 
 // ==================== 喷气背包跳跃物理（极慢下落） ====================
-const JUMP_VEL=-9.5;     // 起跳初速度
-const GRAVITY=0.22;       // 极低重力→缓慢下落，充裕反应
-const JUMP_HOLD=28;       // 长按喷气帧数
-const JUMP_BOOST=0.25;    // 喷气推力
+const JUMP_VEL=-6;        // 起跳初速度（降低→峰值3倍小鼠高）
+const GRAVITY=0.14;       // 极低重力→峰值128px，下降很慢
+const JUMP_HOLD=26;       // 长按喷气帧数
+const JUMP_BOOST=0.2;     // 喷气推力
 const COYOTE=12;          // 土狼时间
 const JBUFFER=10;         // 跳跃缓冲
 // 跳跃峰值高度：9.5²/(2×0.22)≈205px，小鼠42px→轻松越过障碍
