@@ -53,15 +53,15 @@ function loseS(){sfx(50,'sawtooth',0.6,0.8);setTimeout(()=>sfx(30,'sawtooth',0.8
 let state='menu'; // menu|playing|over
 let score=0,level=1,comboC=0,misses=0;
 let hiScore=parseInt(localStorage.wordBlastHi)||0;
-let frame=0,speed=0.6;
+let frame=0,speed=0.3;
 let words=[],particles=[];
-let nextSpawn=60;
+let nextSpawn=100;
 
 // 飘落的单词
 function spawnWord(){
   const w=WORDS[Math.floor(Math.random()*WORDS.length)];
   const x=80+Math.random()*(W-160);
-  words.push({text:w,x,y:-30,speed:0.5+Math.random()*0.6+speed*0.3,alpha:1,color:`hsl(${Math.random()*360},70%,60%)`});
+  words.push({text:w,x,y:-30,speed:0.2+Math.random()*0.3+speed*0.2,alpha:1,color:`hsl(${Math.random()*360},70%,60%)`});
 }
 
 // 粒子爆炸
@@ -85,7 +85,7 @@ function update(){
   nextSpawn--;
   if(nextSpawn<=0){
     spawnWord();
-    nextSpawn=Math.max(25,80-level*5)+Math.floor(Math.random()*30);
+    nextSpawn=Math.max(50,120-level*4)+Math.floor(Math.random()*40);
   }
 
   // 更新单词
@@ -100,8 +100,8 @@ function update(){
   particles=particles.filter(p=>p.life>0);
 
   // 升级
-  const newLevel=Math.floor(score/200)+1;
-  if(newLevel>level){level=newLevel;speed=0.4+level*0.12;levelS()}
+  const newLevel=Math.floor(score/300)+1;
+  if(newLevel>level){level=newLevel;speed=0.25+level*0.06;levelS()}
 
   // 游戏结束
   if(misses>=5){state='over';loseS();if(score>hiScore){hiScore=score;localStorage.wordBlastHi=hiScore}}
