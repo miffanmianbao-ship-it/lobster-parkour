@@ -140,9 +140,11 @@ function update(){
   if(P.onGround&&!P.sliding)P.bobT+=speed*0.12;
 
   // 速度
-  const ph=Math.min(si,4);const sr=[[1.8,3],[2.2,3.8],[2.8,4.5],[3.2,5.2],[3.8,5.8]][ph];
+  const ph=Math.min(si,4);const sr=[[1.5,2.5],[1.8,3.0],[2.2,3.5],[2.5,4.0],[2.8,4.5]][ph];
+  const MAX_SPEED=4.5; // 最高速度上限
   const ts=sr[0]+(sr[1]-sr[0])*Math.min(distance/3500,1);
   if(release)baseSpeed+=(sr[0]-baseSpeed)*0.02;else baseSpeed+=(ts-baseSpeed)*0.002;
+  if(baseSpeed>MAX_SPEED)baseSpeed=MAX_SPEED;
   speed=baseSpeed+(P.boost?2:0);
   distance+=speed*0.2;score+=1+combo*0.3;
   if(shakeT>0)shakeT--;if(flashA>0)flashA-=0.04;
