@@ -59,15 +59,14 @@ SCENES.forEach(s=>s.imgs.forEach(url=>{if(!imgCache[url]){const img=new Image();
 function getImg(si){const s=SCENES[si];if(!s)return null;for(let u of s.imgs){if(imgCache[u]&&imgCache[u].complete&&imgCache[u].naturalWidth>0)return imgCache[u]}return null}
 
 // ==================== 跳跃核心 ====================
-// Chrome Dino / Canabalt 级别的手感参数
-const JUMP_VEL=-14;        // 起跳初速度（负=向上）
-const GRAVITY_UP=0.55;     // 上升阶段重力（轻，留空时间长）
-const GRAVITY_DOWN=1.6;    // 下落阶段重力（重，快速落地=爽快感）
-const JUMP_HOLD_MAX=22;    // 长按跳跃最大额外帧数
-const JUMP_HOLD_BOOST=0.3; // 每帧持续推力
-const COYOTE_FRAMES=8;     // 离开边缘后仍可跳跃的帧数
-const JUMP_BUFFER=6;       // 提前按跳的缓冲帧数
-const HITBOX_SHRINK=0.35;  // 碰撞判定缩小比例
+// 跳跃手感参数（轻盈飘浮风格，适合风景慢游戏）
+const JUMP_VEL=-13;        // 起跳初速度
+const GRAVITY=0.6;         // 统一重力（不再分上升/下落）→ 下落慢，有时间反应
+const JUMP_HOLD_MAX=20;    // 长按额外帧数
+const JUMP_HOLD_BOOST=0.35;// 每帧持续推力
+const COYOTE_FRAMES=10;    // 土狼时间
+const JUMP_BUFFER=8;       // 跳跃缓冲
+const HITBOX_SHRINK=0.3;   // 碰撞宽容
 
 // ==================== 状态 ====================
 let state='menu';
@@ -85,7 +84,7 @@ let jumpBufferT=0;    // 跳跃缓冲剩余
 
 // ==================== 玩家 ====================
 const P={
-  lane:1,tX:LANES[1],x:LANES[1],y:0,w:44,h:56,
+  lane:1,tX:LANES[1],x:LANES[1],y:0,w:38,h:50,
   vy:0,onGround:true,
   sliding:false,slT:0,
   jumping:false,jh:0,
@@ -107,25 +106,25 @@ let obs=[],coins=[],pups=[],parts=[],fgItems=[];
 // ==================== 障碍物（降低高度，符合比例） ====================
 const OBS={
   meadow:[
-    {w:34,h:26,draw(x,y){C.fillStyle='#6B4226';C.fillRect(x+2,y+5,30,18);C.fillStyle='#8B6914';C.fillRect(x+4,y+7,26,14);C.strokeStyle='#4A2A10';C.lineWidth=2;C.strokeRect(x+2,y+5,30,18)}},
-    {w:28,h:32,draw(x,y){C.strokeStyle='#5C4033';C.lineWidth=3;C.beginPath();C.moveTo(x+14,y+32);C.lineTo(x+14,y+10);C.stroke();C.fillStyle='#FF6347';C.beginPath();C.arc(x+14,y+5,14,Math.PI,0);C.fill();C.fillStyle='#FFF';C.beginPath();C.arc(x+7,y,4,0,Math.PI*2);C.fill();C.beginPath();C.arc(x+21,y+2,3,0,Math.PI*2);C.fill()}},
-    {w:36,h:22,draw(x,y){C.fillStyle='#228B22';C.beginPath();C.moveTo(x+3,y+22);C.quadraticCurveTo(x+10,y, x+18,y-2);C.quadraticCurveTo(x+26,y, x+33,y+22);C.fill();for(let j=0;j<3;j++){C.fillStyle='#FF1493';C.beginPath();C.arc(x+10+j*8,y+6+Math.abs(j-1)*4,3,0,Math.PI*2);C.fill()}}}
+    {w:36,h:30,draw(x,y){C.fillStyle='#6B4226';C.fillRect(x+2,y+4,32,22);C.fillStyle='#8B6914';C.fillRect(x+4,y+6,28,18);C.strokeStyle='#4A2A10';C.lineWidth=2;C.strokeRect(x+2,y+4,32,22)}},
+    {w:30,h:36,draw(x,y){C.strokeStyle='#5C4033';C.lineWidth=3;C.beginPath();C.moveTo(x+15,y+36);C.lineTo(x+15,y+12);C.stroke();C.fillStyle='#FF6347';C.beginPath();C.arc(x+15,y+6,15,Math.PI,0);C.fill();C.fillStyle='#FFF';C.beginPath();C.arc(x+8,y+1,5,0,Math.PI*2);C.fill();C.beginPath();C.arc(x+22,y+3,4,0,Math.PI*2);C.fill()}},
+    {w:40,h:26,draw(x,y){C.fillStyle='#228B22';C.beginPath();C.moveTo(x+4,y+26);C.quadraticCurveTo(x+12,y+1,x+20,y-1);C.quadraticCurveTo(x+28,y+1,x+36,y+26);C.fill();for(let j=0;j<4;j++){C.fillStyle='#FF1493';C.beginPath();C.arc(x+10+j*7,y+7+Math.abs(j-2)*5,3,0,Math.PI*2);C.fill()}}}
   ],
   hill:[
-    {w:24,h:44,draw(x,y){C.fillStyle='#556B2F';C.fillRect(x+7,y+2,10,42);C.fillRect(x+3,y+14,18,7);C.beginPath();C.arc(x+12,y+14,9,0,Math.PI*2);C.fill();C.fillRect(x-2,y+24,9,6);C.beginPath();C.arc(x+2,y+24,6,0,Math.PI*2);C.fill()}},
-    {w:34,h:32,draw(x,y){const cx=x+17,cy=y+16;C.strokeStyle='#BDB76B';C.lineWidth=2;for(let a=0;a<8;a++)C.beginPath(),C.arc(cx+Math.cos(a*Math.PI/4+frame*0.04)*4,cy+Math.sin(a*Math.PI/4+frame*0.04)*4,10,0,Math.PI*1.8),C.stroke();C.fillStyle='#BDB76B';C.beginPath();C.arc(cx,cy,4,0,Math.PI*2);C.fill()}}
+    {w:26,h:48,draw(x,y){C.fillStyle='#556B2F';C.fillRect(x+8,y+2,10,46);C.fillRect(x+3,y+16,20,8);C.beginPath();C.arc(x+13,y+16,10,0,Math.PI*2);C.fill();C.fillRect(x-2,y+28,10,7);C.beginPath();C.arc(x+3,y+28,7,0,Math.PI*2);C.fill()}},
+    {w:36,h:36,draw(x,y){const cx=x+18,cy=y+18;C.strokeStyle='#BDB76B';C.lineWidth=2;for(let a=0;a<8;a++)C.beginPath(),C.arc(cx+Math.cos(a*Math.PI/4+frame*0.04)*5,cy+Math.sin(a*Math.PI/4+frame*0.04)*5,12,0,Math.PI*1.8),C.stroke();C.fillStyle='#BDB76B';C.beginPath();C.arc(cx,cy,5,0,Math.PI*2);C.fill()}}
   ],
   coast:[
-    {w:48,h:22,draw(x,y){C.fillStyle='#8B7355';C.beginPath();C.ellipse(x+24,y+11,24,11,0,0,Math.PI*2);C.fill();C.fillStyle='#A0845C';C.beginPath();C.ellipse(x+20,y+8,16,6,0,0,Math.PI*2);C.fill()}},
-    {w:28,h:24,draw(x,y){C.fillStyle='#FFB6C1';C.beginPath();C.arc(x+14,y+12,12,0,Math.PI);C.fill();C.strokeStyle='#FF69B4';C.lineWidth=1;for(let i=0;i<6;i++)C.beginPath(),C.moveTo(x+14,y+12),C.lineTo(x+3+i*4,y+3),C.stroke()}}
+    {w:50,h:26,draw(x,y){C.fillStyle='#8B7355';C.beginPath();C.ellipse(x+25,y+13,25,13,0,0,Math.PI*2);C.fill();C.fillStyle='#A0845C';C.beginPath();C.ellipse(x+21,y+9,17,7,0,0,Math.PI*2);C.fill()}},
+    {w:30,h:28,draw(x,y){C.fillStyle='#FFB6C1';C.beginPath();C.arc(x+15,y+14,14,0,Math.PI);C.fill();C.strokeStyle='#FF69B4';C.lineWidth=1;for(let i=0;i<7;i++)C.beginPath(),C.moveTo(x+15,y+14),C.lineTo(x+3+i*4,y+3),C.stroke()}}
   ],
   snow:[
-    {w:42,h:22,draw(x,y){C.fillStyle='#F0F8FF';C.beginPath();C.ellipse(x+21,y+11,21,11,0,0,Math.PI*2);C.fill();C.fillStyle='#FFFFFF';C.beginPath();C.ellipse(x+17,y+8,14,7,0,0,Math.PI*2);C.fill()}},
-    {w:26,h:36,draw(x,y){const g=C.createLinearGradient(x,y,x,y+36);g.addColorStop(0,'#E0F0FF');g.addColorStop(0.5,'#B0E0E6');g.addColorStop(1,'#87CEEB');C.fillStyle=g;for(let r=0;r<3;r++)C.fillRect(x+3+r*7,y+4+r*9,6,7);C.strokeStyle='rgba(255,255,255,0.4)';C.lineWidth=2;C.strokeRect(x+3,y+4,20,31)}}
+    {w:44,h:26,draw(x,y){C.fillStyle='#F0F8FF';C.beginPath();C.ellipse(x+22,y+13,22,13,0,0,Math.PI*2);C.fill();C.fillStyle='#FFFFFF';C.beginPath();C.ellipse(x+18,y+9,15,8,0,0,Math.PI*2);C.fill()}},
+    {w:28,h:40,draw(x,y){const g=C.createLinearGradient(x,y,x,y+40);g.addColorStop(0,'#E0F0FF');g.addColorStop(0.5,'#B0E0E6');g.addColorStop(1,'#87CEEB');C.fillStyle=g;for(let r=0;r<4;r++)C.fillRect(x+3+r*6,y+5+r*9,6,8);C.strokeStyle='rgba(255,255,255,0.4)';C.lineWidth=2;C.strokeRect(x+3,y+5,22,35)}}
   ],
   flower:[
-    {w:46,h:24,draw(x,y){C.fillStyle='#DEB887';C.fillRect(x,y+14,46,4);C.fillRect(x,y+6,46,4);for(let p=0;p<4;p++){C.fillStyle='#DEB887';C.fillRect(x+5+p*12,y+2,4,18);C.fillStyle='#F5DEB3';C.beginPath();C.moveTo(x+7+p*12,y-2);C.lineTo(x+5+p*12,y+4);C.lineTo(x+9+p*12,y+4);C.closePath();C.fill()}}},
-    {w:24,h:34,draw(x,y){C.fillStyle='#CD853F';C.beginPath();C.moveTo(x+3,y+14);C.lineTo(x,y+34);C.lineTo(x+24,y+34);C.lineTo(x+21,y+14);C.fill();C.fillStyle='#228B22';C.beginPath();C.arc(x+12,y+10,10,0,Math.PI);C.fill();C.fillStyle='#9B30FF';C.beginPath();C.arc(x+6,y+6,5,0,Math.PI*2);C.fill();C.beginPath();C.arc(x+18,y+6,5,0,Math.PI*2);C.fill();C.fillStyle='#FFD700';C.beginPath();C.arc(x+12,y+2,3,0,Math.PI*2);C.fill()}}
+    {w:48,h:28,draw(x,y){C.fillStyle='#DEB887';C.fillRect(x,y+16,48,4);C.fillRect(x,y+7,48,4);for(let p=0;p<5;p++){C.fillStyle='#DEB887';C.fillRect(x+4+p*11,y+2,4,20);C.fillStyle='#F5DEB3';C.beginPath();C.moveTo(x+6+p*11,y-2);C.lineTo(x+4+p*11,y+4);C.lineTo(x+8+p*11,y+4);C.closePath();C.fill()}}},
+    {w:26,h:38,draw(x,y){C.fillStyle='#CD853F';C.beginPath();C.moveTo(x+3,y+16);C.lineTo(x,y+38);C.lineTo(x+26,y+38);C.lineTo(x+23,y+16);C.fill();C.fillStyle='#228B22';C.beginPath();C.arc(x+13,y+12,11,0,Math.PI);C.fill();C.fillStyle='#9B30FF';C.beginPath();C.arc(x+7,y+7,5,0,Math.PI*2);C.fill();C.beginPath();C.arc(x+19,y+7,5,0,Math.PI*2);C.fill();C.fillStyle='#FFD700';C.beginPath();C.arc(x+13,y+3,4,0,Math.PI*2);C.fill()}}
   ]
 };
 const OBS_KEYS=['meadow','hill','coast','snow','flower'];
@@ -194,11 +193,9 @@ function update(){
   if(shakeT>0)shakeT--;
   if(flashA>0)flashA-=0.04;
 
-  // === 跳跃物理（Canabalt/Chrome Dino级别） ===
-  if(P.jumping&&P.jh>0&&(P.vy<0)){P.jh--;P.vy-=JUMP_HOLD_BOOST} // 长按持续上升
-  // 根据上升/下落使用不同重力
-  const grav=P.vy<0?GRAVITY_UP:GRAVITY_DOWN;
-  P.vy+=grav;
+  // 跳跃物理：统一重力+长按持续上升
+  if(P.jumping&&P.jh>0&&(P.vy<0)){P.jh--;P.vy-=JUMP_HOLD_BOOST}
+  P.vy+=GRAVITY;
   P.y+=P.vy;
 
   if(P.y>=GROUND-P.h){
@@ -209,8 +206,8 @@ function update(){
   }
 
   // 滑铲
-  if(P.sliding){P.slT--;P.h=30;if(P.slT<=0){P.sliding=false;P.h=56}}
-  if(!P.sliding)P.h=56;
+  if(P.sliding){P.slT--;P.h=28;if(P.slT<=0){P.sliding=false;P.h=50}}
+  if(!P.sliding)P.h=50;
   if(P.sliding)P.y=GROUND-P.h;
 
   P.tX=LANES[P.lane];P.x+=(P.tX-P.x)*0.22;
