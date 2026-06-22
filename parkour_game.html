@@ -180,8 +180,8 @@ function update(){
   if(P.onGround&&!P.sliding)P.bobT+=speed*0.08;
 
   // 速度
-  const ph=Math.min(si,4);
-  const sr=[[1.5,2.8],[2,3.5],[2.5,4.2],[3,5],[3.5,5.5]][ph];
+  const phase=Math.min(si,4);
+  const sr=[[1.5,2.8],[2,3.5],[2.5,4.2],[3,5],[3.5,5.5]][phase];
   const ts=sr[0]+(sr[1]-sr[0])*Math.min(distance/3500,1);
   if(release)baseSpeed+=(sr[0]-baseSpeed)*0.02;
   else baseSpeed+=(ts-baseSpeed)*0.002;
