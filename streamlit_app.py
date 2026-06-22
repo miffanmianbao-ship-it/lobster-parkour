@@ -2,7 +2,7 @@ import streamlit as st
 import os
 
 st.set_page_config(
-    page_title="瑞士阿尔卑斯 · 风景列车",
+    page_title="长野森林溪畔列车 · 风景窗",
     page_icon="🚂",
     layout="centered"
 )

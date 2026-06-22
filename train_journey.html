@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>🚂 风景列车</title>
+<title>🚂 长野森林溪畔列车</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{background:#000;display:flex;justify-content:center;align-items:center;height:100vh;overflow:hidden;font-family:'Microsoft YaHei',sans-serif;}
@@ -74,7 +74,7 @@ iframe{width:100%;height:100%;border:0}
 <div id="container">
   <div id="video-bg">
     <div id="iframe-wrap">
-      <iframe src="//player.bilibili.com/player.html?bvid=BV1zi4y197pT&page=1&autoplay=1&muted=1&loop=1&danmaku=0&highQuality=1"
+      <iframe src="//player.bilibili.com/player.html?bvid=BV1wLunzKET1&page=1&autoplay=1&muted=0&loop=1&danmaku=0&highQuality=1"
         allow="autoplay" allowfullscreen="true"></iframe>
     </div>
   </div>
@@ -97,7 +97,7 @@ iframe{width:100%;height:100%;border:0}
 
   <div id="progress">
     <div class="bar-bg"><div class="bar-fill" id="bar" style="width:0%"></div></div>
-    <div class="labels"><span>🌅 清晨</span><span>☀ 正午</span><span>🌤 下午</span><span>🌙 傍晚</span></div>
+    <div class="labels"><span>🌅 清晨</span><span>☀ 正午</span><span>🌤 午后</span><span>🌙 傍晚</span></div>
   </div>
 
   <div id="stop-msg"><div class="box"><div class="station" id="st-name"></div><div class="timer" id="st-timer"></div></div></div>
@@ -109,13 +109,13 @@ function getHour(){const d=getBJ();return d.getHours()+d.getMinutes()/60+d.getSe
 
 // 根据北京时间更新风景描述
 const timeViews=[
-  {h:5,name:'🌅 黎明时分',desc:'晨曦微露，湖面泛起金色波光'},
-  {h:7,name:'☀ 瑞士清晨',desc:'阳光洒在阿尔卑斯山谷，绿草如茵'},
-  {h:10,name:'🏔 阿尔卑斯正午',desc:'雪山倒映在碧蓝湖水中，云影掠过山脊'},
-  {h:14,name:'🌤 午后山间',desc:'牛铃声回荡在宁静的山谷，野花遍地'},
-  {h:17,name:'🌅 黄昏降临',desc:'金色夕阳染红雪峰，湖面如火烧般绚烂'},
-  {h:19,name:'🌙 夜幕低垂',desc:'星星点亮深蓝天幕，雪山披上银白月光'},
-  {h:22,name:'🌌 星空之下',desc:'银河横跨天际，万籁俱寂'}
+  {h:5,name:'🌅 长野晨曦',desc:'薄雾笼罩森林，溪流声伴着第一缕阳光'},
+  {h:7,name:'🌿 森林清晨',desc:'列车穿行在翠绿山林间，阳光透过树叶洒落'},
+  {h:10,name:'☀ 溪畔正午',desc:'清澈溪水映着蓝天，列车沿河谷蜿蜒前行'},
+  {h:14,name:'🌤 午后山间',desc:'蝉鸣回荡在幽静山谷，绿荫下光影斑驳'},
+  {h:17,name:'🌅 黄昏时分',desc:'夕阳染红远山，列车缓缓驶过金色稻田'},
+  {h:19,name:'🌙 夜幕降临',desc:'星光点亮夜空，列车灯火温暖如豆'},
+  {h:22,name:'🌌 深夜列车',desc:'万籁俱寂，只有车轮与铁轨的轻语'}
 ];
 
 function updateHUD(){
@@ -140,7 +140,7 @@ updateHUD();
 setInterval(()=>{
   const el=document.getElementById('stop-msg');
   if(Math.random()<0.15&&el.style.display==='none'){
-    const stations=['🚉 因特拉肯','🚉 卢塞恩','🚉 采尔马特','🚉 格林德瓦','🚉 劳特布龙嫩'];
+    const stations=['🚉 松本','🚉 白马','🚉 信浓大町','🚉 穗高','🚉 安昙野'];
     document.getElementById('st-name').textContent=stations[Math.floor(Math.random()*stations.length)];
     document.getElementById('st-timer').textContent='停靠中...';
     el.style.display='block';
