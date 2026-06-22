@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🏃 大龙虾跑酷 PARKOUR</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0a0a1a;
+    display: flex; justify-content: center; align-items: center;
+    height: 100vh; overflow: hidden; font-family: 'Courier New', monospace;
+  }
+  #gameContainer {
+    position: relative;
+    border: 3px solid #00f0ff;
+    border-radius: 12px;
+    box-shadow: 0 0 40px rgba(0,240,255,0.3), 0 0 80px rgba(0,240,255,0.1);
+  }
+  canvas { display: block; border-radius: 9px; cursor: pointer; }
+  #ui {
+    position: absolute; top: 15px; left: 20px;
+    color: #00f0ff; font-size: 18px; font-weight: bold;
+    text-shadow: 0 0 10px #00f0ff; pointer-events: none;
+    z-index: 10;
+  }
+</style>
+</head>
+<body>
+<div id="gameContainer">
+  <canvas id="game"></canvas>
+  <div id="ui"><span id="scoreDisplay">🏆 0</span></div>
+</div>
+
+<script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+
+const W = 1024, H = 500;
+canvas.width = W; canvas.height = H;
+
+// ========== 游戏状态 ==========
+let score = 0, highScore = localStorage.getItem('lobsterHighScore') || 0;
+let gameSpeed = 6, baseSpeed = 6;
+let gameState = 'start'; // start | playing | over
+let frameCount = 0;
+let difficultyLevel = 1;
+
+// ========== 玩家 ==========
+const player = {
+  x: 120, y: 0, w: 40, h: 60,
+  vy: 0, grounded: true,
+  sliding: false, slideTimer: 0,
+  trail: [],
+  reset() {
+    this.y = H - 120 - this.h;
+    this.vy = 0; this.grounded = true;
+    this.sliding = false; this.slideTimer = 0;
+    this.trail = [];
+  }
+};
+player.reset();
+
+const GRAVITY = 1.2;
+const JUMP_FORCE = -17;
+const GROUND_Y = H - 120;
+
+// ========== 障碍物 ==========
+let obstacles = [];
+
+function spawnObstacle() {
+  const types = [
+    { w: 30, h: 50, color: '#ff4466', name: 'box' },
+    { w: 25, h: 70, color: '#ff8844', name: 'tall' },
+    { w: 55, h: 35, color: '#ff44aa', name: 'wide' },
+    { w: 35, h: 45, color: '#ffcc00', name: 'mid' },
+  ];
+  if (difficultyLevel >= 3) types.push({ w: 20, h: 80, color: '#ff2222', name: 'spike' });
+  const type = types[Math.floor(Math.random() * types.length)];
+  obstacles.push({
+    x: W, y: GROUND_Y - type.h,
+    w: type.w, h: type.h,
+    color: type.color, name: type.name,
+    passed: false
+  });
+}
+
+// ========== 粒子效果 ==========
+let particles = [];
+function spawnParticles(x, y, color, count) {
+  for (let i = 0; i < count; i++) {
+    particles.push({
+      x, y, color,
+      vx: (Math.random() - 0.5) * 8,
+      vy: (Math.random() - 0.5) * 8 - 2,
+      life: 1, decay: 0.02 + Math.random() * 0.04,
+      size: 2 + Math.random() * 4,
+    });
+  }
+}
+
+// ========== 地面装饰 ==========
+let groundTiles = [];
+for (let i = 0; i < 30; i++) groundTiles.push({ x: i * 36, speed: 1 });
+
+// ========== 输入处理 ==========
+const keys = {};
+window.addEventListener('keydown', e => {
+  keys[e.code] = true;
+  if (e.code === 'Space' || e.code === 'ArrowUp') {
+    e.preventDefault();
+    jump();
+  }
+  if (e.code === 'ArrowDown' || e.code === 'KeyS') {
+    e.preventDefault();
+    startSlide();
+  }
+  if (e.code === 'KeyR' && gameState === 'over') restartGame();
+  if ((e.code === 'Space' || e.code === 'Enter') && gameState === 'start') startGame();
+});
+window.addEventListener('keyup', e => { keys[e.code] = false; if (e.code === 'ArrowDown') stopSlide(); });
+
+// 移动端触摸
+canvas.addEventListener('touchstart', e => {
+  e.preventDefault();
+  const tx = e.touches[0].clientX, ty = e.touches[0].clientY;
+  const cx = canvas.getBoundingClientRect().left + canvas.width / 2;
+  const cy = canvas.getBoundingClientRect().top + canvas.height / 2;
+  if (ty < cy) jump();
+  else if (ty > cy + 80 && gameState === 'playing') startSlide();
+  if (gameState === 'start') startGame();
+  if (gameState === 'over') restartGame();
+});
+canvas.addEventListener('touchend', e => { stopSlide(); });
+
+// 鼠标点击
+canvas.addEventListener('click', () => {
+  if (gameState === 'start') startGame();
+  if (gameState === 'over') restartGame();
+  if (gameState === 'playing') jump();
+});
+
+function jump() {
+  if (!player.grounded || player.sliding) return;
+  player.vy = JUMP_FORCE;
+  player.grounded = false;
+  spawnParticles(player.x + player.w/2, player.y + player.h, '#fff', 5);
+}
+function startSlide() {
+  if (!player.grounded || player.sliding) return;
+  player.sliding = true; player.slideTimer = 15;
+  player.h = 35; player.y += 25;
+}
+
+function stopSlide() {
+  if (!player.sliding) return;
+  player.sliding = false; player.slideTimer = 0;
+  player.y -= 25; player.h = 60;
+}
+
+function startGame() { gameState = 'playing'; frameCount = 0; }
+function restartGame() {
+  if (score > highScore) { highScore = score; localStorage.setItem('lobsterHighScore', highScore); }
+  score = 0; gameSpeed = baseSpeed; difficultyLevel = 1;
+  obstacles = []; particles = [];
+  player.reset();
+  gameState = 'playing';
+  frameCount = 0;
+}
+
+// ========== 更新逻辑 ==========
+function update() {
+  if (gameState !== 'playing') return;
+  frameCount++;
+
+  // 加速
+  difficultyLevel = Math.floor(score / 300) + 1;
+  gameSpeed = baseSpeed + difficultyLevel * 1.8;
+  if (gameSpeed > 18) gameSpeed = 18;
+
+  // 玩家物理
+  player.vy += GRAVITY;
+  player.y += player.vy;
+  if (player.y >= GROUND_Y - player.h) {
+    player.y = GROUND_Y - player.h;
+    player.vy = 0;
+    player.grounded = true;
+  }
+
+  // 滑铲计时
+  if (player.sliding) {
+    player.slideTimer--;
+    if (player.slideTimer <= 0) stopSlide();
+  }
+
+  // 尾迹
+  player.trail.push({ x: player.x + player.w/2, y: player.y + player.h/2, life: 0.5 });
+  player.trail = player.trail.filter(t => { t.life -= 0.04; return t.life > 0; });
+
+  // 障碍物
+  if (frameCount % Math.max(25, 70 - difficultyLevel * 5) === 0) spawnObstacle();
+  obstacles.forEach(o => o.x -= gameSpeed);
+  obstacles = obstacles.filter(o => o.x > -80);
+
+  // 碰撞检测
+  for (let o of obstacles) {
+    const px = player.x + 8, py = player.y + 5, pw = player.w - 16, ph = player.h - 10;
+    if (px < o.x + o.w && px + pw > o.x && py < o.y + o.h && py + ph > o.y) {
+      gameState = 'over';
+      if (score > highScore) { highScore = score; localStorage.setItem('lobsterHighScore', highScore); }
+      spawnParticles(player.x + player.w/2, player.y + player.h/2, '#ff4466', 40);
+      return;
+    }
+  }
+
+  // 计分
+  obstacles.forEach(o => { if (!o.passed && o.x + o.w < player.x) { o.passed = true; score += 10; } });
+  score += 0.3;
+  if (frameCount % 5 === 0 && player.grounded && !player.sliding) {
+    spawnParticles(player.x + 5, player.y + player.h, '#00f0ff', 1);
+  }
+
+  // 粒子更新
+  particles.forEach(p => { p.x += p.vx; p.y += p.vy; p.vy += 0.1; p.life -= p.decay; });
+  particles = particles.filter(p => p.life > 0);
+
+  // 地面瓦片
+  groundTiles.forEach(t => { t.x -= gameSpeed * t.speed; if (t.x < -40) t.x += 40 * 30; });
+}
+
+// ========== 渲染 ==========
+function drawBackground() {
+  // 天空渐变
+  const grad = ctx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, '#0a0a2e');
+  grad.addColorStop(0.5, '#101040');
+  grad.addColorStop(1, '#1a1040');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H);
+
+  // 星星
+  ctx.fillStyle = '#ffffff';
+  for (let i = 0; i < 60; i++) {
+    const sx = (i * 173 + frameCount * 0.3) % W;
+    const sy = (i * 97) % (H * 0.6);
+    const b = 0.3 + Math.sin(frameCount * 0.05 + i) * 0.3;
+    ctx.globalAlpha = b;
+    ctx.fillRect(sx, sy, 2, 2);
+  }
+  ctx.globalAlpha = 1;
+
+  // 远景建筑
+  ctx.fillStyle = '#151530';
+  for (let i = 0; i < 12; i++) {
+    const bx = (i * 90 - frameCount * 0.6) % (W + 200) - 100;
+    const bh = 60 + (i * 37) % 120;
+    ctx.fillRect(bx, GROUND_Y - bh, 50, bh + 20);
+  }
+
+  // 中景建筑
+  ctx.fillStyle = '#1a1a40';
+  for (let i = 0; i < 8; i++) {
+    const mx = (i * 140 - frameCount * 1.2) % (W + 300) - 150;
+    const mh = 80 + (i * 53) % 150;
+    ctx.fillRect(mx, GROUND_Y - mh, 70, mh + 20);
+    // 窗户
+    ctx.fillStyle = '#ffcc44';
+    for (let wy = GROUND_Y - mh + 15; wy < GROUND_Y - 20; wy += 25) {
+      for (let wx = mx + 12; wx < mx + 60; wx += 22) {
+        ctx.globalAlpha = 0.3 + Math.sin(frameCount * 0.1 + wx) * 0.2;
+        ctx.fillRect(wx, wy, 10, 14);
+      }
+    }
+    ctx.fillStyle = '#1a1a40';
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawGround() {
+  // 地面
+  const groundGrad = ctx.createLinearGradient(0, GROUND_Y, 0, H);
+  groundGrad.addColorStop(0, '#00f0ff');
+  groundGrad.addColorStop(0.03, '#00ccff');
+  groundGrad.addColorStop(0.1, '#1a3060');
+  groundGrad.addColorStop(1, '#0a0a20');
+  ctx.fillStyle = groundGrad;
+  ctx.fillRect(0, GROUND_Y, W, H - GROUND_Y);
+
+  // 地面线
+  ctx.strokeStyle = '#00f0ff';
+  ctx.lineWidth = 2;
+  ctx.shadowColor = '#00f0ff';
+  ctx.shadowBlur = 8;
+  ctx.beginPath();
+  ctx.moveTo(0, GROUND_Y);
+  ctx.lineTo(W, GROUND_Y);
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+
+  // 地面标记
+  ctx.fillStyle = '#00f0ff44';
+  groundTiles.forEach(t => {
+    ctx.fillRect(t.x, GROUND_Y + 5, 20, 3);
+  });
+}
+
+function drawPlayer() {
+  const { x, y, w, h, sliding } = player;
+
+  // 尾迹
+  player.trail.forEach(t => {
+    ctx.fillStyle = `rgba(0,240,255,${t.life * 0.5})`;
+    ctx.beginPath();
+    ctx.arc(t.x, t.y, 6 * t.life, 0, Math.PI * 2);
+    ctx.fill();
+  });
+
+  // 发光效果
+  ctx.shadowColor = '#00f0ff';
+  ctx.shadowBlur = 15;
+
+  // 身体
+  const bodyGrad = ctx.createLinearGradient(x, y, x, y + h);
+  bodyGrad.addColorStop(0, '#00f0ff');
+  bodyGrad.addColorStop(1, '#0060aa');
+  ctx.fillStyle = bodyGrad;
+  ctx.beginPath();
+  if (sliding) {
+    ctx.ellipse(x + w/2, y + h/2, w/2, h/2, 0, 0, Math.PI * 2);
+  } else {
+    ctx.roundRect(x, y, w, h, 8);
+  }
+  ctx.fill();
+
+  // 眼睛
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = '#fff';
+  const eyeY = sliding ? y + 10 : y + 12;
+  ctx.beginPath(); ctx.arc(x + 28, eyeY, 7, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#0a0a2e';
+  ctx.beginPath(); ctx.arc(x + 30, eyeY, 3.5, 0, Math.PI * 2); ctx.fill();
+
+  // 高光
+  ctx.fillStyle = '#fff';
+  ctx.beginPath(); ctx.arc(x + 32, eyeY - 2, 1.5, 0, Math.PI * 2); ctx.fill();
+
+  // 腿（站立时）
+  if (!sliding && player.grounded) {
+    ctx.fillStyle = '#0099cc';
+    const legOff = Math.abs(Math.sin(frameCount * 0.3)) * 4;
+    ctx.fillRect(x + 8, y + h - 5, 10, 12 + legOff);
+    ctx.fillRect(x + 22, y + h - 5, 10, 12 - legOff);
+  }
+}
+
+function drawObstacles() {
+  obstacles.forEach(o => {
+    // 发光
+    ctx.shadowColor = o.color;
+    ctx.shadowBlur = 12;
+    ctx.fillStyle = o.color;
+    ctx.beginPath();
+    ctx.roundRect(o.x, o.y, o.w, o.h, 4);
+    ctx.fill();
+
+    // 警告条纹
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = '#00000033';
+    for (let sy = o.y; sy < o.y + o.h; sy += 8) {
+      if (Math.floor(sy / 8) % 2 === 0) ctx.fillRect(o.x, sy, o.w, 4);
+    }
+  });
+}
+
+function drawParticles() {
+  particles.forEach(p => {
+    ctx.globalAlpha = p.life;
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+    ctx.fill();
+  });
+  ctx.globalAlpha = 1;
+}
+
+function drawUI() {
+  document.getElementById('scoreDisplay').textContent = `🏆 ${Math.floor(score)}`;
+
+  // High score
+  ctx.fillStyle = '#ffffff66';
+  ctx.font = '14px "Courier New"';
+  ctx.textAlign = 'right';
+  ctx.fillText(`最高分: ${Math.floor(highScore)}`, W - 20, 30);
+
+  // 难度
+  ctx.fillText(`难度 Lv.${difficultyLevel}  |  速度 ${gameSpeed.toFixed(1)}`, W - 20, 50);
+
+  // 游戏状态
+  ctx.textAlign = 'center';
+  if (gameState === 'start') {
+    ctx.fillStyle = '#00f0ff';
+    ctx.font = 'bold 36px "Courier New"';
+    ctx.shadowColor = '#00f0ff'; ctx.shadowBlur = 20;
+    ctx.fillText('🦞 大龙虾跑酷 🦞', W/2, H/2 - 50);
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '18px "Microsoft YaHei"';
+    ctx.fillText('点击屏幕 / 按空格键 开始游戏', W/2, H/2 + 10);
+    ctx.fillText('↑ 或 空格 = 跳跃    ↓ 或 S = 滑铲', W/2, H/2 + 40);
+    ctx.font = '14px "Microsoft YaHei"';
+    ctx.fillStyle = '#888';
+    ctx.fillText('手机：上半屏跳跃 | 下半屏滑铲', W/2, H/2 + 70);
+  } else if (gameState === 'over') {
+    ctx.fillStyle = '#ff4466';
+    ctx.font = 'bold 40px "Courier New"';
+    ctx.shadowColor = '#ff4466'; ctx.shadowBlur = 20;
+    ctx.fillText('游戏结束', W/2, H/2 - 30);
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '22px "Microsoft YaHei"';
+    ctx.fillText(`得分: ${Math.floor(score)}    最高分: ${Math.floor(highScore)}`, W/2, H/2 + 25);
+    ctx.font = '16px "Microsoft YaHei"';
+    ctx.fillText('按 R 键 或 点击屏幕 重新开始', W/2, H/2 + 60);
+  }
+}
+
+function draw() {
+  drawBackground();
+  drawGround();
+  drawObstacles();
+  drawPlayer();
+  drawParticles();
+  drawUI();
+}
+
+// ========== 主循环 ==========
+function gameLoop() {
+  update();
+  draw();
+  requestAnimationFrame(gameLoop);
+}
+
+gameLoop();
+</script>
+</body>
+</html>
