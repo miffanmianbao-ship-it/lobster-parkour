@@ -54,10 +54,11 @@ function getSi(){for(let i=SCENES.length-1;i>=0;i--)if(distance>=SCENES[i].start
 function getImg(si){const s=SCENES[si];if(!s)return null;for(let u of s.imgs){if(imgCache[u]&&imgCache[u].complete&&imgCache[u].naturalWidth>0)return imgCache[u]}return null}
 
 // ==================== 喷气背包跳跃物理（极慢下落） ====================
-const JUMP_VEL=-6;        // 起跳初速度（降低→峰值3倍小鼠高）
-const GRAVITY=0.14;       // 极低重力→峰值128px，下降很慢
-const JUMP_HOLD=26;       // 长按喷气帧数
-const JUMP_BOOST=0.2;     // 喷气推力
+const JUMP_VEL=-4.2;      // 一段跳初速度（峰值~64px≈1.5倍小鼠高）
+const JUMP_VEL2=-4.2;     // 二段跳额外速度（总峰值~128px≈3倍小鼠高）
+const GRAVITY=0.14;       // 极低重力→下降很慢
+const JUMP_HOLD=20;       // 长按喷气帧数
+const JUMP_BOOST=0.15;    // 喷气推力
 const COYOTE=12;          // 土狼时间
 const JBUFFER=10;         // 跳跃缓冲
 // 跳跃峰值高度：9.5²/(2×0.22)≈205px，小鼠42px→轻松越过障碍
@@ -86,7 +87,8 @@ const P={
   magnet:false,mgT:0,
   boost:false,bsT:0,
   bobT:0,
-  reset(){this.lane=1;this.tX=LANES[1];this.x=LANES[1];this.y=GROUND-this.h;this.vy=0;this.onGround=true;this.sliding=false;this.slT=0;this.jumping=false;this.jh=0;this.shield=false;this.shT=0;this.magnet=false;this.mgT=0;this.boost=false;this.bsT=0;this.bobT=0;}
+  dj:true,djCd:0,       // 二段跳
+  reset(){this.lane=1;this.tX=LANES[1];this.x=LANES[1];this.y=GROUND-this.h;this.vy=0;this.onGround=true;this.sliding=false;this.slT=0;this.jumping=false;this.jh=0;this.shield=false;this.shT=0;this.magnet=false;this.mgT=0;this.boost=false;this.bsT=0;this.bobT=0;this.dj=true;this.djCd=0;}
 };
 
 let obs=[],coins=[],pups=[],parts=[],fgItems=[];
@@ -127,7 +129,7 @@ function initFg(){fgItems=[];const si=getSi(),sc=SCENES[si];for(let i=0;i<28;i++
 function update(){
   if(state!=='playing')return;
   frame++;
-  if(invT>0)invT--;if(P.shield){P.shT--;if(P.shT<=0)P.shield=false}if(P.magnet){P.mgT--;if(P.mgT<=0)P.magnet=false}if(P.boost){P.bsT--;if(P.bsT<=0)P.boost=false}
+  if(invT>0)invT--;if(P.shield){P.shT--;if(P.shT<=0)P.shield=false}if(P.magnet){P.mgT--;if(P.mgT<=0)P.magnet=false}if(P.boost){P.bsT--;if(P.bsT<=0)P.boost=false}if(P.djCd>0)P.djCd--;
 
   // Coyote time + Jump buffer
   if(P.onGround)coyT=COYOTE;else if(coyT>0)coyT--;
@@ -149,7 +151,7 @@ function update(){
   if(P.jumping&&P.jh>0&&P.vy<0){P.jh--;P.vy-=JUMP_BOOST}
   P.vy+=GRAVITY;
   P.y+=P.vy;
-  if(P.y>=GROUND-P.h){P.y=GROUND-P.h;P.vy=0;if(!P.onGround){P.onGround=true;P.jumping=false}}else{P.onGround=false}
+  if(P.y>=GROUND-P.h){P.y=GROUND-P.h;P.vy=0;if(!P.onGround){P.onGround=true;P.jumping=false;P.dj=true}}else{P.onGround=false}
 
   // 滑铲
   if(P.sliding){P.slT--;P.h=24;if(P.slT<=0){P.sliding=false;P.h=42}}if(!P.sliding)P.h=42;if(P.sliding)P.y=GROUND-P.h;
@@ -183,7 +185,7 @@ function update(){
   parts.forEach(p=>{p.x+=p.vx;p.y+=p.vy;p.vy+=0.05;p.life-=p.dec});parts=parts.filter(p=>p.life>0);
 }
 
-function doJump(){if(!P.onGround&&coyT<=0)return;P.vy=JUMP_VEL;P.onGround=false;P.jumping=true;P.jh=JUMP_HOLD;jmp();emit(P.x+P.w/2,P.y+P.h,'#fff',8,3)}
+function doJump(){if(P.onGround||coyT>0){P.vy=JUMP_VEL;P.onGround=false;P.jumping=true;P.jh=JUMP_HOLD;jmp();emit(P.x+P.w/2,P.y+P.h,'#fff',8,3)}else if(P.dj&&P.djCd<=0){P.vy=JUMP_VEL2;P.dj=false;P.djCd=20;P.jumping=true;P.jh=JUMP_HOLD;jmp();emit(P.x+P.w/2,P.y+P.h/2,'#FFF',12,5)}}
 function die(){state='dead';dieS();shakeT=18;shakeI=7;flashA=0.5;emit(P.x+P.w/2,P.y+P.h/2,'#FF6347',45,8);if(score>hiScore){hiScore=Math.floor(score);localStorage.jetMouseHi=hiScore;recS()}}
 function restart(){score=0;distance=0;speed=1.8;baseSpeed=1.8;frame=0;lastSi=0;transA=0;transT=0;combo=0;comboT=0;stars=0;invT=120;release=false;releaseT=0;coyT=0;jbufT=0;obs=[];coins=[];pups=[];parts=[];obsST=100;coinST=25;initFg();P.reset();P.lane=1;P.x=LANES[1];P.tX=LANES[1];P.y=GROUND-P.h;state='playing'}
 
@@ -249,12 +251,12 @@ function draw(){C.clearRect(0,0,W,H);let sx=0,sy=0;if(shakeT>0){sx=(Math.random(
 
 // ==================== 输入 ====================
 window.addEventListener('keydown',e=>{
-  if(e.code==='Space'||e.code==='ArrowUp'||e.code==='KeyW'){e.preventDefault();ia();if(state==='menu'){restart();return}if(state==='dead'){restart();return}if(state!=='playing')return;if(P.onGround||coyT>0)doJump();else jbufT=JBUFFER}
+  if(e.code==='Space'||e.code==='ArrowUp'||e.code==='KeyW'){e.preventDefault();ia();if(state==='menu'){restart();return}if(state==='dead'){restart();return}if(state!=='playing')return;doJump()}
   if(state!=='playing')return;if(e.code==='ArrowDown'||e.code==='KeyS'){e.preventDefault();if(P.onGround&&!P.sliding){P.sliding=true;P.slT=14;sld()}}if((e.code==='ArrowLeft'||e.code==='KeyA')&&P.lane>0){P.lane--;chg()}if((e.code==='ArrowRight'||e.code==='KeyD')&&P.lane<2){P.lane++;chg()}
 });
 window.addEventListener('keyup',e=>{if(e.code==='Space'||e.code==='ArrowUp'||e.code==='KeyW'){P.jumping=false;P.jh=0}if(e.code==='ArrowDown'||e.code==='KeyS'){if(P.sliding){P.sliding=false;P.slT=0}}});
 
-cv.addEventListener('touchstart',e=>{e.preventDefault();ia();if(state==='menu'){restart();return}if(state==='dead'){restart();return}const t=e.touches[0],r=cv.getBoundingClientRect(),tx=t.clientX-r.left,ty=t.clientY-r.top,rx=tx/r.width,ry=ty/r.height;if(ry<0.5){if(P.onGround||coyT>0)doJump();else jbufT=JBUFFER}else{if(P.onGround&&!P.sliding){P.sliding=true;P.slT=14;sld()}}if(rx<0.3&&P.lane>0){P.lane--;chg()}if(rx>0.7&&P.lane<2){P.lane++;chg()}});
+cv.addEventListener('touchstart',e=>{e.preventDefault();ia();if(state==='menu'){restart();return}if(state==='dead'){restart();return}const t=e.touches[0],r=cv.getBoundingClientRect(),tx=t.clientX-r.left,ty=t.clientY-r.top,rx=tx/r.width,ry=ty/r.height;if(ry<0.5)doJump();else{if(P.onGround&&!P.sliding){P.sliding=true;P.slT=14;sld()}}if(rx<0.3&&P.lane>0){P.lane--;chg()}if(rx>0.7&&P.lane<2){P.lane++;chg()}});
 cv.addEventListener('touchend',()=>{P.jumping=false;P.jh=0;if(P.sliding){P.sliding=false;P.slT=0}});
 cv.addEventListener('click',()=>{ia();if(state==='menu'||state==='dead')restart()});
 
