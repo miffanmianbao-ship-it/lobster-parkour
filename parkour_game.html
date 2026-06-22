@@ -715,6 +715,7 @@ cv.addEventListener('touchend',()=>{P.jumping=false;P.jh=0;if(P.sliding){P.slidi
 cv.addEventListener('click',()=>{initA();if(state==='menu'||state==='dead')restart()});
 
 // ==================== 主循环 ====================
+function loop(){update();draw();requestAnimationFrame(loop)}
 P.x=LANES[1];P.tX=LANES[1];P.y=GROUND-P.h;
 loop();
 </script>
